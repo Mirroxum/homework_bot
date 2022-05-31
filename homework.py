@@ -49,6 +49,7 @@ def get_api_answer(current_timestamp):
     params = {'from_date': timestamp}
     response = requests.get(ENDPOINT, headers=HEADERS, params=params)
     if response.status_code == HTTPStatus.OK:
+        logging.info('Ответ от сервера получен')
         return response.json()
     else:
         logging.error(
@@ -70,16 +71,16 @@ def check_response(response):
                     return homeworks_response
                 else:
                     logging.error('Получен некорректный тип homeworks')
-                    raise TypeError
+                    raise TypeError('Получен некорректный тип homeworks')
             else:
                 logging.error('Пустой список')
-                raise ValueError
+                raise ValueError('Пустой список')
         else:
             logging.error('В ответе отсвутствуют нужные ключи')
-            raise ValueError
+            raise ValueError('В ответе отсвутствуют нужные ключи')
     else:
         logging.error('Получен некорректный тип response')
-        raise TypeError
+        raise TypeError('Получен некорректный тип response')
 
 
 def parse_status(homework):
@@ -109,6 +110,7 @@ def check_tokens():
 def main():
     """Основная логика работы бота."""
     if check_tokens:
+        error_cache_message = ''
         bot = Bot(token=TELEGRAM_TOKEN)
         current_timestamp = int(time())
     logging.info('Инициализация прошла успешно')
@@ -124,8 +126,10 @@ def main():
             sleep(RETRY_TIME)
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
-            send_message(bot, message)
             logging.error(message)
+            if message != error_cache_message:
+                send_message(bot, message)
+                error_cache_message = message
             sleep(RETRY_TIME)
 
 
