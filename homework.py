@@ -50,9 +50,9 @@ def get_api_answer(current_timestamp):
     """
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params={'from_date': current_timestamp})
-    except Exception:
+    except ConnectionError:
         logger.error(
-        f'Сбой при попытке запросв к API: {response}', exc_info=True)
+        f'Сбой при попытке запроса к API: {response}', exc_info=True)
     if response.status_code != HTTPStatus.OK:
         raise ConnectionError(
             f'API вернул код отличный от 200: {response.status_code}!')
@@ -119,6 +119,8 @@ def main():
             response = get_api_answer(current_timestamp)
             if homework := check_response(response):
                 send_message(bot, parse_status(homework.pop()))
+                if 'current_date' not in response.keys():
+                    raise ValueError('В ответе отсвутствуют нужные ключи')
                 current_timestamp = response['current_date']
             else:
                 logger.info('Обновлений нет')
