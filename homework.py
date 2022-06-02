@@ -15,7 +15,8 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 handler = logging.StreamHandler(stream=sys.stdout)
-handler.setFormatter(logging.Formatter('%(asctime)s - %(lineno)d.%(levelname)s(%(funcName)s) - %(message)s'))
+handler.setFormatter(logging.Formatter(
+    '%(asctime)s - %(lineno)d.%(levelname)s(%(funcName)s) - %(message)s'))
 logger.addHandler(handler)
 
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
@@ -41,7 +42,8 @@ def send_message(bot, message):
         logger.info('Удачная отправка сообщения')
     except TelegramError:
         logger.error(
-            f'Cбой при отправке сообщения "{message}" в Telegram.', exc_info=True)
+            f'Cбой при отправке сообщения "{message}" в Telegram.',
+            exc_info=True)
 
 
 def get_api_answer(current_timestamp):
@@ -51,10 +53,11 @@ def get_api_answer(current_timestamp):
     из формата JSON к типам данных Python.
     """
     try:
-        response = requests.get(ENDPOINT, headers=HEADERS, params={'from_date': current_timestamp})
+        response = requests.get(ENDPOINT, headers=HEADERS, params={
+                                'from_date': current_timestamp})
     except ConnectionError:
         logger.error(
-        f'Сбой при попытке запроса к API: {response}', exc_info=True)
+            f'Сбой при попытке запроса к API: {response}', exc_info=True)
     if response.status_code != HTTPStatus.OK:
         raise ConnectionError(
             f'API вернул код отличный от 200: {response.status_code}!')
@@ -63,7 +66,7 @@ def get_api_answer(current_timestamp):
         return response.json()
     except requests.exceptions.JSONDecodeError:
         logger.error(
-        f'Сбой декодирования JSON из ответа: {response}', exc_info=True)
+            f'Сбой декодирования JSON из ответа: {response}', exc_info=True)
 
 
 def check_response(response):
@@ -75,7 +78,7 @@ def check_response(response):
         raise ValueError('Пустой список')
     if not isinstance(response, dict):
         raise TypeError('Получен некорректный тип response')
-    if ('current_date' not in response.keys()) or ('homeworks' not in response.keys()):
+    if ('current_date' or 'homeworks') not in response.keys():
         raise KeyMissingError('В ответе отсвутствуют нужные ключи')
     if not isinstance(response['homeworks'], list):
         raise TypeError('Получен некорректный тип homeworks')
@@ -95,7 +98,7 @@ def parse_status(homework):
         return f'Изменился статус проверки работы "{homework_name}". {verdict}'
     else:
         raise KeyError('Недокументированный статус домашней работы,',
-            f'обнаруженный в ответе: {homework_status}')
+                       f'обнаруженный в ответе: {homework_status}')
 
 
 def check_tokens():
@@ -129,7 +132,10 @@ def main():
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             traceback_print = ''.join(traceback.format_tb(exc_traceback))
-            message = f'Сбой в работе программы.\nТип: {exc_type.__name__}.\nОписание:{exc_value}.\nМесто ошибки:{traceback_print}'
+            message = ('Сбой в работе программы.\n',
+                       f'Тип: {exc_type.__name__}.\n',
+                       f'Описание:{exc_value}.\n',
+                       f'Место ошибки:{traceback_print}')
             logger.error(message)
             if message != error_cache_message or exc_type != KeyMissingError:
                 send_message(bot, message)
