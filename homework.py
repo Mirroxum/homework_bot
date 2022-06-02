@@ -94,8 +94,9 @@ def parse_status(homework):
         raise TypeError(f'В homework отсутствуют необходимые поля: {homework}')
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
-    if verdict := HOMEWORK_VERDICT.get(homework_status):
-        return f'Изменился статус проверки работы "{homework_name}". {verdict}'
+    if HOMEWORK_VERDICT.get(homework_status):
+        return (f'Изменился статус проверки работы "{homework_name}". ',
+                HOMEWORK_VERDICT.get(homework_status))
     else:
         raise KeyError('Недокументированный статус домашней работы,',
                        f'обнаруженный в ответе: {homework_status}')
@@ -123,8 +124,8 @@ def main():
             response = get_api_answer(current_timestamp)
             if 'current_date' not in response.keys():
                 raise ValueError('В ответе отсвутствуют нужные ключи')
-            if homework := check_response(response):
-                send_message(bot, parse_status(homework.pop()))
+            if check_response(response):
+                send_message(bot, parse_status(check_response(response).pop()))
                 current_timestamp = response['current_date']
             else:
                 logger.info('Обновлений нет')
