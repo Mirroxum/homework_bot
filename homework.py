@@ -92,14 +92,13 @@ def parse_status(homework):
         return None
     if 'homework_name' and 'status' not in homework.keys():
         raise TypeError(f'В homework отсутствуют необходимые поля: {homework}')
-    homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
-    if HOMEWORK_VERDICT.get(homework_status):
-        return (f'Изменился статус проверки работы "{homework_name}". ',
-                HOMEWORK_VERDICT.get(homework_status))
-    else:
+    homework_name = homework.get('homework_name')
+    if not HOMEWORK_VERDICT[homework_status]:
         raise KeyError('Недокументированный статус домашней работы,',
                        f'обнаруженный в ответе: {homework_status}')
+    verdict = HOMEWORK_VERDICT[homework_status]
+    return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
 def check_tokens():
