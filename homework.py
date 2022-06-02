@@ -137,7 +137,7 @@ def main():
                        f'Описание:{exc_value}.\n',
                        f'Место ошибки:{traceback_print}')
             logger.error(message)
-            if message != error_cache_message or exc_type != KeyMissingError:
+            if message != error_cache_message and exc_type != KeyMissingError:
                 send_message(bot, message)
                 error_cache_message = message
             sleep(RETRY_TIME)
