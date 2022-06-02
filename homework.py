@@ -9,6 +9,8 @@ import requests
 from dotenv import load_dotenv
 from telegram import Bot, TelegramError
 
+from exception_bot import KeyMissingError
+
 load_dotenv()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -69,17 +71,16 @@ def check_response(response):
     Если ответ API соответствует ожиданиям,
     то функция возвращает список домашних работ.
     """
-    if not isinstance(response, dict):
-        raise TypeError('Получен некорректный тип response')
-    if not 'current_date' or 'homeworks' not in response.keys():
-        raise ValueError('В ответе отсвутствуют нужные ключи')
     if not response:
         raise ValueError('Пустой список')
-    homeworks_response = response['homeworks']
-    if not isinstance(homeworks_response, list):
+    if not isinstance(response, dict):
+        raise TypeError('Получен некорректный тип response')
+    if ('current_date' not in response.keys()) or ('homeworks' not in response.keys()):
+        raise KeyMissingError('В ответе отсвутствуют нужные ключи')
+    if not isinstance(response['homeworks'], list):
         raise TypeError('Получен некорректный тип homeworks')
     logger.info('Получен корректный ответ от API')
-    return homeworks_response
+    return response['homeworks']
 
 
 def parse_status(homework):
@@ -117,10 +118,10 @@ def main():
     while True:
         try:
             response = get_api_answer(current_timestamp)
+            if 'current_date' not in response.keys():
+                raise ValueError('В ответе отсвутствуют нужные ключи')
             if homework := check_response(response):
                 send_message(bot, parse_status(homework.pop()))
-                if 'current_date' not in response.keys():
-                    raise ValueError('В ответе отсвутствуют нужные ключи')
                 current_timestamp = response['current_date']
             else:
                 logger.info('Обновлений нет')
@@ -130,7 +131,7 @@ def main():
             traceback_print = ''.join(traceback.format_tb(exc_traceback))
             message = f'Сбой в работе программы.\nТип: {exc_type.__name__}.\nОписание:{exc_value}.\nМесто ошибки:{traceback_print}'
             logger.error(message)
-            if message != error_cache_message:
+            if message != error_cache_message or exc_type != KeyMissingError:
                 send_message(bot, message)
                 error_cache_message = message
             sleep(RETRY_TIME)
