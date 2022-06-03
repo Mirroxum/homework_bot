@@ -1,7 +1,6 @@
 import logging
 import os
 import sys
-import traceback
 from http import HTTPStatus
 from time import sleep, time
 
@@ -52,21 +51,26 @@ def get_api_answer(current_timestamp):
     В случае успешного запроса ответ API, преобразовав его
     из формата JSON к типам данных Python.
     """
+    request_value = {'endpoint': ENDPOINT,
+                     'headers': HEADERS,
+                     'params': {'from_date': current_timestamp}}
     try:
-        response = requests.get(ENDPOINT, headers=HEADERS, params={
-                                'from_date': current_timestamp})
-    except ConnectionError:
-        logger.error(
-            f'Сбой при попытке запроса к API: {response}', exc_info=True)
-    if response.status_code != HTTPStatus.OK:
-        raise ConnectionError(
-            f'API вернул код отличный от 200: {response.status_code}!')
-    logger.info('Ответ от сервера получен')
-    try:
+        response = requests.get(request_value['endpoint'],
+                                headers=request_value['headers'],
+                                params=request_value['params'])
+        if response.status_code != HTTPStatus.OK:
+            raise ConnectionError(
+                f'API вернул код отличный от 200: {response.status_code}!')
+        logger.info('Ответ от сервера получен')
         return response.json()
-    except requests.exceptions.JSONDecodeError:
-        logger.error(
-            f'Сбой декодирования JSON из ответа: {response}', exc_info=True)
+    except ConnectionError as e:
+        raise ConnectionError(
+            'Произошла ошибка при попытке запроса ',
+            f'к API c параметрами: {request_value}') from e
+    except ValueError as e:
+        raise ValueError(
+            f'Сбой декодирования JSON из ответа: {response} ',
+            f'с параметрами: {request_value}') from e
 
 
 def check_response(response):
@@ -78,8 +82,10 @@ def check_response(response):
         raise ValueError('Пустой список')
     if not isinstance(response, dict):
         raise TypeError('Получен некорректный тип response')
-    if ('current_date' or 'homeworks') not in response.keys():
-        raise KeyMissingError('В ответе отсвутствуют нужные ключи')
+    if 'homeworks' not in response.keys():
+        raise KeyMissingError('В ответе отсвутствует нужный ключ homeworks')
+    if 'current_date' not in response.keys():
+        raise KeyMissingError('В ответе отсвутствует нужный ключ current_date')
     if not isinstance(response['homeworks'], list):
         raise TypeError('Получен некорректный тип homeworks')
     logger.info('Получен корректный ответ от API')
@@ -88,56 +94,45 @@ def check_response(response):
 
 def parse_status(homework):
     """Извлекает из информации статус работы."""
-    if not len(homework):
-        return None
-    if 'homework_name' and 'status' not in homework.keys():
-        raise TypeError(f'В homework отсутствуют необходимые поля: {homework}')
     homework_status = homework.get('status')
     homework_name = homework.get('homework_name')
-    if not HOMEWORK_VERDICT[homework_status]:
-        raise KeyError('Недокументированный статус домашней работы,',
-                       f'обнаруженный в ответе: {homework_status}')
+    if 'homework_name' not in homework.keys():
+        raise TypeError(
+            f'В homework отсутствует поле homework_name: {homework}')
+    if 'status' not in homework.keys():
+        raise TypeError(
+            f'В homework отсутствует поле status: {homework}')
     verdict = HOMEWORK_VERDICT[homework_status]
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
 def check_tokens():
     """Проверяет доступность переменных окружения."""
-    if TELEGRAM_TOKEN and TELEGRAM_CHAT_ID and PRACTICUM_TOKEN:
-        return True
-    logger.critical('Отсутствуют обязательные переменные окружения')
-    return False
+    return TELEGRAM_TOKEN and TELEGRAM_CHAT_ID and PRACTICUM_TOKEN
 
 
 def main():
     """Основная логика работы бота."""
-    if check_tokens():
-        error_cache_message = ''
-        bot = Bot(token=TELEGRAM_TOKEN)
-        current_timestamp = int(time())
-        logger.info('Инициализация прошла успешно')
-    else:
+    if not check_tokens():
+        logger.critical('Отсутствуют обязательные переменные окружения')
         sys.exit('Отсутствуют обязательные переменные окружения')
+    error_cache_message = ''
+    bot = Bot(token=TELEGRAM_TOKEN)
+    current_timestamp = int(time())
+    logger.info('Инициализация прошла успешно')
     while True:
         try:
             response = get_api_answer(current_timestamp)
-            if 'current_date' not in response.keys():
-                raise ValueError('В ответе отсвутствуют нужные ключи')
-            if check_response(response):
+            if check_response(response) == {}:
                 send_message(bot, parse_status(check_response(response).pop()))
                 current_timestamp = response['current_date']
             else:
                 logger.info('Обновлений нет')
             sleep(RETRY_TIME)
-        except Exception:
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            traceback_print = ''.join(traceback.format_tb(exc_traceback))
-            message = ('Сбой в работе программы.\n',
-                       f'Тип: {exc_type.__name__}.\n',
-                       f'Описание:{exc_value}.\n',
-                       f'Место ошибки:{traceback_print}')
-            logger.error(message)
-            if message != error_cache_message and exc_type != KeyMissingError:
+        except Exception as error:
+            message = ('Сбой в работе программы.')
+            logger.error(message, exc_info=True)
+            if message != error_cache_message and error != KeyMissingError:
                 send_message(bot, message)
                 error_cache_message = message
             sleep(RETRY_TIME)
