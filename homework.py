@@ -67,8 +67,8 @@ def get_api_answer(current_timestamp):
         raise ConnectionError(
             'Произошла ошибка при попытке запроса ',
             f'к API c параметрами: {request_value}') from e
-    except ValueError as e:
-        raise ValueError(
+    except requests.exceptions.JSONDecodeError as e:
+        raise requests.exceptions.JSONDecodeError(
             f'Сбой декодирования JSON из ответа: {response} ',
             f'с параметрами: {request_value}') from e
 
@@ -83,9 +83,11 @@ def check_response(response):
     if not isinstance(response, dict):
         raise TypeError('Получен некорректный тип response')
     if 'homeworks' not in response.keys():
-        raise KeyMissingError('В ответе отсвутствует нужный ключ homeworks')
+        raise KeyMissingError(
+            f'В ответе отсвутствует ключ homeworks.Response:{response}')
     if 'current_date' not in response.keys():
-        raise KeyMissingError('В ответе отсвутствует нужный ключ current_date')
+        raise KeyMissingError(
+            f'В ответе отсвутствует ключ current_date.Response:{response}')
     if not isinstance(response['homeworks'], list):
         raise TypeError('Получен некорректный тип homeworks')
     logger.info('Получен корректный ответ от API')
@@ -94,16 +96,14 @@ def check_response(response):
 
 def parse_status(homework):
     """Извлекает из информации статус работы."""
-    homework_status = homework.get('status')
-    homework_name = homework.get('homework_name')
-    if 'homework_name' not in homework.keys():
-        raise TypeError(
-            f'В homework отсутствует поле homework_name: {homework}')
-    if 'status' not in homework.keys():
-        raise TypeError(
-            f'В homework отсутствует поле status: {homework}')
-    verdict = HOMEWORK_VERDICT[homework_status]
-    return f'Изменился статус проверки работы "{homework_name}". {verdict}'
+    try:
+        homework_status = homework.get('status')
+        homework_name = homework.get('homework_name')
+        verdict = HOMEWORK_VERDICT[homework_status]
+        return f'Изменился статус проверки работы "{homework_name}". {verdict}'
+    except KeyError as e:
+        raise KeyError(
+            f'В homework отсутствуют нужные поля.Homework: {homework}') from e
 
 
 def check_tokens():
@@ -123,7 +123,7 @@ def main():
     while True:
         try:
             response = get_api_answer(current_timestamp)
-            if check_response(response) == {}:
+            if check_response(response) != []:
                 send_message(bot, parse_status(check_response(response).pop()))
                 current_timestamp = response['current_date']
             else:
