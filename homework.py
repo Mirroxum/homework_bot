@@ -3,7 +3,6 @@ import os
 import sys
 from http import HTTPStatus
 from time import sleep, time
-from typing import final
 
 import requests
 from dotenv import load_dotenv
