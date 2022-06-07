@@ -66,8 +66,8 @@ def get_api_answer(current_timestamp):
         homework = response.json()
     except HTTPStatusNotOK as e:
         raise HTTPStatusNotOK(
-                'API вернул код отличный от 200',
-                f'Статус: {response.status_code}!') from e
+            'API вернул код отличный от 200',
+            f'Статус: {response.status_code}!') from e
     except ConnectionError as e:
         raise ConnectionError(
             'Произошла ошибка при попытке запроса ',
@@ -101,16 +101,13 @@ def check_response(response):
             raise TypeError()
     except KeyMissError as e:
         raise KeyMissError(
-                'В ответе отсвутствует ключ необходимый ключ.',
-                f'Response:{response}') from e
+            'В ответе отсвутствует ключ необходимый ключ.',
+            f'Response:{response}') from e
     except TypeError as e:
         raise TypeError('Получен некорректный тип переменных') from e
     else:
         logger.info('Получен корректный ответ от API')
         return response['homeworks']
-
- 
-        
 
 
 def parse_status(homework):
