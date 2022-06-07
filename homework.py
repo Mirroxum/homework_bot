@@ -3,12 +3,13 @@ import os
 import sys
 from http import HTTPStatus
 from time import sleep, time
+from typing import final
 
 import requests
 from dotenv import load_dotenv
 from telegram import Bot, TelegramError
 
-from exception_bot import (KeyMissError, JSONError,
+from exception_bot import (KeyMissError, JSONError, TGError,
                            RequestError, HTTPStatusNotOK)
 
 load_dotenv()
@@ -23,7 +24,7 @@ PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-RETRY_TIME = 600
+RETRY_TIME = 5
 TIMEOUT_SERVER = 5
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
@@ -41,7 +42,7 @@ def send_message(bot, message):
         bot.send_message(
             chat_id=TELEGRAM_CHAT_ID, text=message)
     except TelegramError as e:
-        raise TelegramError(
+        raise TGError(
             f'Cбой при отправке сообщения "{message}" в Telegram.') from e
     else:
         logger.info('Удачная отправка сообщения')
@@ -53,20 +54,21 @@ def get_api_answer(current_timestamp):
     В случае успешного запроса ответ API, преобразовав его
     из формата JSON к типам данных Python.
     """
-    request_value = [ENDPOINT, HEADERS, {'from_date': current_timestamp}]
+    request_value = [ENDPOINT, HEADERS,
+                     {'from_date': current_timestamp}, TIMEOUT_SERVER]
     try:
-        endpoint, headers, params = request_value
+        endpoint, headers, params, timeout = request_value
         response = requests.get(endpoint,
                                 headers=headers,
                                 params=params,
-                                timeout=TIMEOUT_SERVER)
+                                timeout=timeout)
         if response.status_code != HTTPStatus.OK:
-            raise HTTPStatusNotOK(
-                f'API вернул код отличный от 200: {response.status_code}!')
-        logger.info('Ответ от сервера получен')
-        return response.json()
-    except TimeoutError as e:
-        raise TimeoutError('Превышено время ожидания от сервера') from e
+            raise HTTPStatusNotOK()
+        homework = response.json()
+    except HTTPStatusNotOK as e:
+        raise HTTPStatusNotOK(
+                'API вернул код отличный от 200',
+                f'Статус: {response.status_code}!') from e
     except ConnectionError as e:
         raise ConnectionError(
             'Произошла ошибка при попытке запроса ',
@@ -79,6 +81,9 @@ def get_api_answer(current_timestamp):
         raise RequestError(
             'Ошибка вызванная request. При попытке сделать',
             f'запрос с параметрами {request_value}') from e
+    else:
+        logger.info('Ответ от сервера получен')
+        return homework
 
 
 def check_response(response):
@@ -86,18 +91,27 @@ def check_response(response):
     Если ответ API соответствует ожиданиям,
     то функция возвращает список домашних работ.
     """
-    if not isinstance(response, dict):
-        raise TypeError('Получен некорректный тип response')
-    if 'homeworks' not in response.keys():
+    try:
+        if not isinstance(response, dict):
+            raise TypeError()
+        if 'homeworks' not in response.keys():
+            raise KeyMissError()
+        if 'current_date' not in response.keys():
+            raise KeyMissError()
+        if not isinstance(response['homeworks'], list):
+            raise TypeError()
+    except KeyMissError as e:
         raise KeyMissError(
-            f'В ответе отсвутствует ключ homeworks.Response:{response}')
-    if 'current_date' not in response.keys():
-        raise KeyMissError(
-            f'В ответе отсвутствует ключ current_date.Response:{response}')
-    if not isinstance(response['homeworks'], list):
-        raise TypeError('Получен некорректный тип homeworks')
-    logger.info('Получен корректный ответ от API')
-    return response['homeworks']
+                'В ответе отсвутствует ключ необходимый ключ.',
+                f'Response:{response}') from e
+    except TypeError as e:
+        raise TypeError('Получен некорректный тип переменных') from e
+    else:
+        logger.info('Получен корректный ответ от API')
+        return response['homeworks']
+
+ 
+        
 
 
 def parse_status(homework):
@@ -105,9 +119,6 @@ def parse_status(homework):
     homework_status = homework.get('status')
     homework_name = homework.get('homework_name')
     verdict = HOMEWORK_VERDICT.get(homework_status)
-    if homework_status is None:
-        raise KeyError(
-            f'В homework отсутствует нужноее поле status.Homework: {homework}')
     if homework_name is None:
         raise KeyError(
             f'В homework отсутствует нужноее поле name.Homework: {homework}')
@@ -127,7 +138,6 @@ def main():
     if not check_tokens():
         logger.critical('Отсутствуют обязательные переменные окружения')
         sys.exit('Отсутствуют обязательные переменные окружения')
-    error_cache_message = ''
     bot = Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time())
     logger.info('Инициализация прошла успешно')
@@ -139,12 +149,12 @@ def main():
                 current_timestamp = response['current_date']
             else:
                 logger.info('Обновлений нет')
-        except Exception as error:
+        except KeyMissError:
+            logger.error('Сбой в работе программы.', exc_info=True)
+        except Exception:
             message = ('Сбой в работе программы.')
             logger.error(message, exc_info=True)
-            if message != error_cache_message and type(error) != KeyMissError:
-                send_message(bot, message)
-                error_cache_message = message
+            send_message(bot, message)
         finally:
             sleep(RETRY_TIME)
 

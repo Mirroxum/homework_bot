@@ -13,3 +13,7 @@ class RequestError(Exception):
 class HTTPStatusNotOK(Exception):
     """API вернул код отличный от 200"""
     pass
+
+class TGError(Exception):
+    """Ошибка пакета python-telegram-bot"""
+    pass
