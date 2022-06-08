@@ -91,9 +91,11 @@ def check_response(response):
     if not isinstance(response, dict):
         raise TypeError('Получен некорректный тип Response.')
     if 'homeworks' not in response.keys():
-        raise KeyMissError('В ответе отсвутствует ключ необходимый ключ homeworks.')
+        raise KeyMissError(
+            'В ответе отсвутствует ключ необходимый ключ homeworks.')
     if 'current_date' not in response.keys():
-        raise KeyMissError('В ответе отсвутствует ключ необходимый ключ current_date.')
+        raise KeyMissError(
+            'В ответе отсвутствует ключ необходимый ключ current_date.')
     if not isinstance(response['homeworks'], list):
         raise TypeError('Получен некорректный тип homeworks.')
     return response['homeworks']
