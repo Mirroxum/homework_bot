@@ -53,14 +53,12 @@ def get_api_answer(current_timestamp):
     В случае успешного запроса ответ API, преобразовав его
     из формата JSON к типам данных Python.
     """
-    request_value = [ENDPOINT, HEADERS,
-                     {'from_date': current_timestamp}, TIMEOUT_SERVER]
+    request_value = {'url': ENDPOINT,
+                     'headers': HEADERS,
+                     'params': {'from_date': current_timestamp},
+                     'timeout': TIMEOUT_SERVER}
     try:
-        endpoint, headers, params, timeout = request_value
-        response = requests.get(endpoint,
-                                headers=headers,
-                                params=params,
-                                timeout=timeout)
+        response = requests.get(**request_value)
         if response.status_code != HTTPStatus.OK:
             raise HTTPStatusNotOK()
         homework = response.json()
@@ -90,24 +88,15 @@ def check_response(response):
     Если ответ API соответствует ожиданиям,
     то функция возвращает список домашних работ.
     """
-    try:
-        if not isinstance(response, dict):
-            raise TypeError()
-        if 'homeworks' not in response.keys():
-            raise KeyMissError()
-        if 'current_date' not in response.keys():
-            raise KeyMissError()
-        if not isinstance(response['homeworks'], list):
-            raise TypeError()
-    except KeyMissError as e:
-        raise KeyMissError(
-            'В ответе отсвутствует ключ необходимый ключ.',
-            f'Response:{response}') from e
-    except TypeError as e:
-        raise TypeError('Получен некорректный тип переменных') from e
-    else:
-        logger.info('Получен корректный ответ от API')
-        return response['homeworks']
+    if not isinstance(response, dict):
+        raise TypeError('Получен некорректный тип Response.')
+    if 'homeworks' not in response.keys():
+        raise KeyMissError('В ответе отсвутствует ключ необходимый ключ homeworks.')
+    if 'current_date' not in response.keys():
+        raise KeyMissError('В ответе отсвутствует ключ необходимый ключ current_date.')
+    if not isinstance(response['homeworks'], list):
+        raise TypeError('Получен некорректный тип homeworks.')
+    return response['homeworks']
 
 
 def parse_status(homework):
@@ -140,15 +129,19 @@ def main():
     while True:
         try:
             response = get_api_answer(current_timestamp)
-            if len(check_response(response)):
-                send_message(bot, parse_status(check_response(response).pop()))
+            correct_response = check_response(response)
+            logger.info('Получен корректный ответ от API')
+            if len(correct_response):
+                send_message(bot, parse_status(correct_response.pop()))
                 current_timestamp = response['current_date']
             else:
                 logger.info('Обновлений нет')
         except KeyMissError:
             logger.error('Сбой в работе программы.', exc_info=True)
+        except TGError:
+            logger.error('Сбой в работе программы.', exc_info=True)
         except Exception:
-            message = ('Сбой в работе программы.')
+            message = (f'Сбой в работе программы. Ошибка:{type(Exception)}')
             logger.error(message, exc_info=True)
             send_message(bot, message)
         finally:
