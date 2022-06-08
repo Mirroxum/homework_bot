@@ -140,8 +140,8 @@ def main():
             logger.error('Сбой в работе программы.', exc_info=True)
         except TGError:
             logger.error('Сбой в работе программы.', exc_info=True)
-        except Exception:
-            message = (f'Сбой в работе программы. Ошибка:{type(Exception)}')
+        except Exception as error:
+            message = (f'Сбой в работе программы. Ошибка:{error}')
             logger.error(message, exc_info=True)
             send_message(bot, message)
         finally:
